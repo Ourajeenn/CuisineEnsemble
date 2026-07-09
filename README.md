@@ -1,4 +1,4 @@
-# 🍽️ CuisineEnsemble
+# CuisineEnsemble
 
 <div align="center">
 
