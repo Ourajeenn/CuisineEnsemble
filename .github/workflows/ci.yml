@@ -1,0 +1,123 @@
+name: CuisineEnsemble CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # 1. Static Code Analysis (Linting & Style Checks)
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Linters
+        run: |
+          pip install flake8 black
+
+      - name: Run Flake8 (Python Style Linting)
+        run: |
+          flake8 backend/app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Frontend Linters
+        run: |
+          cd frontend
+          npm install
+
+      - name: Run ESLint (JS/React Linting)
+        run: |
+          cd frontend
+          npm run lint --if-present
+
+  # 2. Security Static Analysis (SAST with Semgrep)
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Semgrep Security Scan
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep SAST
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: auto
+          # Exit with code 1 if findings above WARNING severity are discovered
+          generateSarif: "1"
+
+  # 3. Automated Backend Testing & Code Coverage
+  test-backend:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Run Pytest with Coverage
+        run: |
+          cd backend
+          python -m pytest --cov=app --cov-report=xml tests/
+
+      - name: Upload Coverage to Codecov (Simulation)
+        run: echo "Uploading coverage reports to Codecov..."
+
+  # 4. Build and Push Docker Images
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [test-backend, security-scan]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub (Simulation)
+        run: echo "Docker Login successful (simulation)"
+
+      - name: Build Backend Image
+        run: |
+          docker build -t cuisine-ensemble-backend:latest ./backend
+
+      - name: Build Frontend Image
+        run: |
+          docker build -t cuisine-ensemble-frontend:latest ./frontend
+
+  # 5. Simulate Kubernetes Staging Deployment
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Kubeconfig (Simulation)
+        run: echo "Kubeconfig setup successful"
+
+      - name: Deploy to K8s Staging
+        run: |
+          echo "kubectl apply -f k8s/backend-deployment.yml"
+          echo "kubectl apply -f k8s/frontend-deployment.yml"
+          echo "Deployment successful!"

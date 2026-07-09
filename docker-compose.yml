@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: cuisine_ensemble_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: cuisine_ensemble
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: cuisine_ensemble_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/cuisine_ensemble
+      - SECRET_KEY=super_secret_cuisine_ensemble_key_2026
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    container_name: cuisine_ensemble_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cuisine_ensemble_prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cuisine_ensemble_grafana
+    ports:
+      - "3100:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres_data:
+  grafana_data:
