@@ -1,4 +1,4 @@
-# Dossier Technique Complet - JustEcoBox
+# Dossier Technique Complet - CuisineEnsemble
 
 Ce document détaille l'architecture technique, l'API, le modèle de données et la vision Data/IA de la solution JustEcoBox.
 
