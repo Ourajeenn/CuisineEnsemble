@@ -1,0 +1,53 @@
+groups:
+  - name: cuisine_ensemble_alerts
+    interval: 30s
+    rules:
+
+      # ── Availability ────────────────────────────────────────
+      - alert: BackendDown
+        expr: up{job="cuisine_backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "🔴 CuisineEnsemble Backend est DOWN"
+          description: "Le service backend (FastAPI) ne répond plus depuis {{ $labels.instance }}."
+
+      - alert: HighErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m]) /
+          rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "⚠️ Taux d'erreur HTTP élevé (>5%)"
+          description: "{{ printf \"%.1f\" (mul $value 100) }}% des requêtes retournent une erreur 5xx."
+
+      # ── Latency ─────────────────────────────────────────────
+      - alert: SlowAPIResponse
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{job="cuisine_backend"}[5m])
+          ) > 2
+        for: 3m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "⚠️ Latence API élevée (p95 > 2s)"
+          description: "95% des requêtes prennent plus de {{ $value | humanizeDuration }}."
+
+      # ── Business metrics ────────────────────────────────────
+      - alert: NoMealsCreatedRecently
+        expr: |
+          increase(meals_created_total[1h]) == 0
+        for: 2h
+        labels:
+          severity: info
+          service: backend
+        annotations:
+          summary: "ℹ️ Aucun repas créé depuis 1h"
+          description: "Aucun nouveau repas n'a été créé ces 2 dernières heures."

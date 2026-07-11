@@ -245,7 +245,7 @@ def get_meal_participations(meal_id: int, current_user: models.User = Depends(au
     is_guest = db.query(models.Participation).filter(
         models.Participation.meal_id == meal_id,
         models.Participation.guest_id == current_user.id,
-        models.Participation.status == "booked"
+        models.Participation.status.in_(["booked", "confirmed"])
     ).first() is not None
     
     if not (is_cook or is_guest or current_user.role == "admin"):
@@ -253,8 +253,23 @@ def get_meal_participations(meal_id: int, current_user: models.User = Depends(au
         
     return db.query(models.Participation).filter(
         models.Participation.meal_id == meal_id,
-        models.Participation.status == "booked"
+        models.Participation.status.in_(["booked", "confirmed"])
     ).all()
+
+@app.post(f"{settings.API_V1_STR}/participations/{{participation_id}}/pay", response_model=schemas.ParticipationResponse)
+def pay_for_meal(participation_id: int, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    participation = db.query(models.Participation).filter(models.Participation.id == participation_id).first()
+    if not participation:
+        raise HTTPException(status_code=404, detail="Réservation introuvable")
+    if participation.guest_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Vous ne pouvez payer que vos propres réservations")
+    if participation.status != "booked":
+        raise HTTPException(status_code=400, detail="Cette réservation ne peut pas être payée (statut incorrect)")
+        
+    updated_part = crud.pay_participation(db=db, participation_id=participation_id)
+    if not updated_part:
+        raise HTTPException(status_code=400, detail="Échec du paiement")
+    return updated_part
 
 # -----------------
 # CHAT LOG HISTORY
@@ -269,7 +284,7 @@ def get_chat_history(meal_id: int, current_user: models.User = Depends(auth.get_
     is_guest = db.query(models.Participation).filter(
         models.Participation.meal_id == meal_id,
         models.Participation.guest_id == current_user.id,
-        models.Participation.status == "booked"
+        models.Participation.status.in_(["booked", "confirmed"])
     ).first() is not None
     
     if not (is_cook or is_guest or current_user.role == "admin"):
@@ -366,7 +381,7 @@ async def websocket_endpoint(
     is_guest = db.query(models.Participation).filter(
         models.Participation.meal_id == meal_id,
         models.Participation.guest_id == user.id,
-        models.Participation.status == "booked"
+        models.Participation.status.in_(["booked", "confirmed"])
     ).first() is not None
 
     if not (is_cook or is_guest or user.role == "admin"):

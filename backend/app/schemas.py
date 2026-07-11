@@ -43,6 +43,9 @@ class UserResponse(UserBase):
 class MealBase(BaseModel):
     title: str
     description: Optional[str] = None
+    starter: Optional[str] = None
+    main_course: Optional[str] = None
+    dessert: Optional[str] = None
     max_guests: int = Field(..., gt=0)
     total_price_estimate: float = Field(..., gt=0)
     datetime: dt_module.datetime
@@ -57,6 +60,9 @@ class MealCreate(MealBase):
 class MealUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    starter: Optional[str] = None
+    main_course: Optional[str] = None
+    dessert: Optional[str] = None
     max_guests: Optional[int] = None
     total_price_estimate: Optional[float] = None
     datetime: Optional[dt_module.datetime] = None
@@ -88,6 +94,7 @@ class ParticipationResponse(BaseModel):
     status: str
     amount_due: float
     guest: UserResponse
+    meal: Optional[MealResponse] = None
 
     class Config:
         from_attributes = True

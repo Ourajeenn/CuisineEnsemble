@@ -219,3 +219,31 @@ def test_ratings_workflow(client):
     # Verify cook's rating is updated
     response = client.get(f"{settings.API_V1_STR}/users/me", headers=headers_cook)
     assert response.json()["average_rating"] == 5.0
+
+def test_payment_workflow(client):
+    # 1. Login guest
+    response = client.post(f"{settings.API_V1_STR}/auth/login", json={
+        "email": "guest1@example.com",
+        "password": "guestpassword123"
+    })
+    guest_token = response.json()["access_token"]
+    headers_guest = {"Authorization": f"Bearer {guest_token}"}
+    
+    # 2. Get meals
+    response = client.get(f"{settings.API_V1_STR}/meals")
+    meal_id = response.json()[0]["id"]
+    
+    # 3. Create participation
+    response = client.post(f"{settings.API_V1_STR}/participations", json={"meal_id": meal_id}, headers=headers_guest)
+    assert response.status_code == 201
+    participation_id = response.json()["id"]
+    assert response.json()["status"] == "booked"
+    
+    # 4. Pay participation
+    response = client.post(f"{settings.API_V1_STR}/participations/{participation_id}/pay", headers=headers_guest)
+    assert response.status_code == 200
+    assert response.json()["status"] == "confirmed"
+    
+    # 5. Verify the guest is still counted as active in costs
+    response = client.get(f"{settings.API_V1_STR}/meals/{meal_id}")
+    assert response.json()["current_guests"] >= 1

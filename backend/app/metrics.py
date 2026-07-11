@@ -1,24 +1,39 @@
 from prometheus_client import Counter, Gauge, Histogram
 
-# Prometheus metrics for CuisineEnsemble
+# ── Prometheus metrics — CuisineEnsemble ──────────────────────
 MEALS_CREATED = Counter(
-    "cuisine_ensemble_meals_created_total", 
+    "meals_created_total",
     "Nombre total de repas crees"
 )
 
-BOOKINGS_TOTAL = Counter(
-    "cuisine_ensemble_bookings_total", 
+PARTICIPATIONS_TOTAL = Counter(
+    "participations_total",
     "Nombre total de reservations",
-    ["status"] # "booked", "cancelled"
+    ["status"]  # "booked", "cancelled"
 )
 
+# Legacy alias kept for backward compat
+BOOKINGS_TOTAL = PARTICIPATIONS_TOTAL
+
 ACTIVE_CHAT_CONNECTIONS = Gauge(
-    "cuisine_ensemble_active_chat_connections",
+    "websocket_connections_active",
     "Nombre de connexions WebSocket de chat actives"
 )
 
+ACTIVE_USERS = Gauge(
+    "active_users_total",
+    "Nombre d'utilisateurs connectes (via auth token)"
+)
+
 HTTP_REQUEST_LATENCY = Histogram(
-    "cuisine_ensemble_http_request_latency_seconds",
+    "http_request_duration_seconds",
     "Latence des requetes HTTP en secondes",
-    ["method", "endpoint"]
+    ["method", "endpoint"],
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0]
+)
+
+PAYMENTS_TOTAL = Counter(
+    "payments_total",
+    "Nombre total de paiements effectues",
+    ["status"]  # "success", "failed"
 )

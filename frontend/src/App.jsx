@@ -58,6 +58,9 @@ export default function App() {
   // New meal form state
   const [newMealTitle, setNewMealTitle] = useState("");
   const [newMealDesc, setNewMealDesc] = useState("");
+  const [newMealStarter, setNewMealStarter] = useState("");
+  const [newMealMainCourse, setNewMealMainCourse] = useState("");
+  const [newMealDessert, setNewMealDessert] = useState("");
   const [newMealMaxGuests, setNewMealMaxGuests] = useState(4);
   const [newMealTotalPrice, setNewMealTotalPrice] = useState(30);
   const [newMealDate, setNewMealDate] = useState("");
@@ -65,6 +68,16 @@ export default function App() {
   const [newMealLat, setNewMealLat] = useState(48.8566);
   const [newMealLng, setNewMealLng] = useState(2.3522);
   const [newMealAllergens, setNewMealAllergens] = useState([]);
+
+  // Payment modal state
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payParticipation, setPayParticipation] = useState(null);
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardName, setCardName] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCVV, setCardCVV] = useState("");
+  const [cardFlipped, setCardFlipped] = useState(false);
+  const [payLoading, setPayLoading] = useState(false);
 
   // Load user session on start
   useEffect(() => {
@@ -242,6 +255,9 @@ export default function App() {
       const mealData = {
         title: newMealTitle,
         description: newMealDesc,
+        starter: newMealStarter || null,
+        main_course: newMealMainCourse || null,
+        dessert: newMealDessert || null,
         max_guests: parseInt(newMealMaxGuests),
         total_price_estimate: parseFloat(newMealTotalPrice),
         datetime: newMealDate,
@@ -258,6 +274,9 @@ export default function App() {
       // Reset form
       setNewMealTitle("");
       setNewMealDesc("");
+      setNewMealStarter("");
+      setNewMealMainCourse("");
+      setNewMealDessert("");
       setNewMealMaxGuests(4);
       setNewMealTotalPrice(30);
       setNewMealDate("");
@@ -265,6 +284,24 @@ export default function App() {
       setNewMealAllergens([]);
     } catch (err) {
       alert("Erreur de création : " + (err.response?.data?.detail || "Veuillez vérifier les champs"));
+    }
+  };
+
+  const handlePay = async (e) => {
+    e.preventDefault();
+    if (!payParticipation) return;
+    setPayLoading(true);
+    try {
+      await api.post(`/participations/${payParticipation.id}/pay`);
+      setShowPayModal(false);
+      setPayParticipation(null);
+      setCardNumber(""); setCardName(""); setCardExpiry(""); setCardCVV("");
+      fetchMyReservations();
+      alert("✅ Paiement confirmé ! Votre place est réservée.");
+    } catch (err) {
+      alert("Erreur de paiement : " + (err.response?.data?.detail || "Erreur"));
+    } finally {
+      setPayLoading(false);
     }
   };
 
@@ -783,84 +820,87 @@ export default function App() {
               <div className="row">
                 {myReservations.map((part) => {
                   const meal = part.meal;
+                  if (!meal) return null;
                   const isPast = new Date(meal.datetime) < new Date();
+                  const isPaid = part.status === "confirmed";
+                  const isCancelled = part.status === "cancelled";
                   
                   return (
                     <div className="col-md-6 mb-4" key={part.id}>
-                      <div className="card h-100 shadow-sm border-0" style={{ borderRadius: "var(--radius)", overflow: "hidden" }}>
-                        <div style={{ background: "rgba(200, 90, 50, 0.08)", padding: "1.25rem", borderBottom: "1px solid rgba(200, 90, 50, 0.05)" }}>
+                      <div className="reservation-card" style={{ border: isPaid ? "1.5px solid #22c55e" : isCancelled ? "1.5px solid #e5e7eb" : "1.5px solid rgba(200,90,50,0.15)", borderRadius: "var(--radius)", overflow: "hidden", background: "white", boxShadow: "0 4px 20px rgba(0,0,0,0.07)" }}>
+                        {/* Header */}
+                        <div style={{ background: isPaid ? "linear-gradient(135deg,#16a34a,#22c55e)" : isCancelled ? "#f3f4f6" : "linear-gradient(135deg,var(--accent),var(--primary))", padding: "1.1rem 1.25rem" }}>
                           <div className="d-flex justify-content-between align-items-center">
-                            <h4 className="m-0 h5 fw-bold">{meal.title}</h4>
-                            <span className={`badge ${part.status === 'booked' ? 'bg-success' : 'bg-secondary'}`}>
-                              {part.status === 'booked' ? 'Inscrit' : 'Annulé'}
+                            <h4 className="m-0 h6 fw-bold" style={{ color: isCancelled ? "#6b7280" : "white" }}>{meal.title}</h4>
+                            <span style={{ fontSize: "0.75rem", fontWeight: 700, padding: "3px 10px", borderRadius: 50, background: "rgba(255,255,255,0.25)", color: isCancelled ? "#6b7280" : "white" }}>
+                              {isPaid ? "✅ Payé" : isCancelled ? "❌ Annulé" : "⏳ En attente"}
                             </span>
                           </div>
-                          <span className="small text-muted">Organisé par : {meal.cook.name}</span>
+                          <div style={{ fontSize: "0.8rem", color: isCancelled ? "#9ca3af" : "rgba(255,255,255,0.8)", marginTop: 4 }}>par {meal.cook?.name}</div>
                         </div>
-                        
-                        <div className="card-body d-flex flex-column justify-content-between">
-                          <div>
-                            <p className="card-text text-muted small">{meal.description}</p>
-                            <div className="mb-3 small text-muted">
-                              <div><strong>📅 Date/Heure : </strong>{new Date(meal.datetime).toLocaleString()}</div>
-                              <div><strong>📍 Adresse : </strong>{meal.address}</div>
-                              <div><strong>🥗 Allergènes déclarés : </strong>{(meal.allergens || []).join(", ") || "Aucun"}</div>
-                            </div>
-                            
-                            <div className="p-3 bg-light rounded text-center mb-3">
-                              <div className="small text-muted uppercase font-weight-bold">RÉPARTITION DU COÛT EN TEMPS RÉEL</div>
-                              <div className="d-flex justify-content-around mt-2">
-                                <div>
-                                  <div className="small text-muted">Prix Total Estimé</div>
-                                  <h5 className="m-0 fw-bold">{meal.total_price_estimate.toFixed(2)}€</h5>
-                                </div>
-                                <div style={{ borderRight: "1px solid #ccc" }}></div>
-                                <div>
-                                  <div className="small text-muted">Nombre d'inscrits</div>
-                                  <h5 className="m-0 fw-bold">{meal.current_guests}</h5>
-                                </div>
-                                <div style={{ borderRight: "1px solid #ccc" }}></div>
-                                <div>
-                                  <div className="small text-primary">Votre part due</div>
-                                  <h5 className="m-0 fw-bold text-primary">{part.amount_due.toFixed(2)}€</h5>
-                                </div>
+
+                        <div style={{ padding: "1rem 1.25rem" }}>
+                          {/* Menu détaillé si disponible */}
+                          {(meal.starter || meal.main_course || meal.dessert) && (
+                            <div style={{ background: "rgba(200,90,50,0.04)", borderRadius: 10, padding: "0.75rem 1rem", marginBottom: "0.9rem", border: "1px solid rgba(200,90,50,0.1)" }}>
+                              <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "var(--primary)", marginBottom: 8 }}>🍽️ Menu</div>
+                              <div className="d-flex flex-column gap-1" style={{ fontSize: "0.82rem" }}>
+                                {meal.starter && <div><span style={{ fontWeight: 600, color: "#6b7280" }}>Entrée :</span> {meal.starter}</div>}
+                                {meal.main_course && <div><span style={{ fontWeight: 600, color: "#6b7280" }}>Plat :</span> {meal.main_course}</div>}
+                                {meal.dessert && <div><span style={{ fontWeight: 600, color: "#6b7280" }}>Dessert :</span> {meal.dessert}</div>}
                               </div>
                             </div>
+                          )}
+
+                          <div className="d-flex flex-column gap-1 mb-3" style={{ fontSize: "0.83rem", color: "#6b7280" }}>
+                            <div>📅 {new Date(meal.datetime).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}</div>
+                            <div>📍 {meal.address}</div>
                           </div>
 
-                          <div className="d-flex gap-2 justify-content-end">
-                            {part.status === "booked" && (
-                              <>
-                                <button
-                                  className="btn btn-app btn-app-primary"
-                                  onClick={() => {
-                                    setChatMealId(meal.id);
-                                    setShowChatModal(true);
-                                  }}
-                                >
-                                  <i className="fas fa-comments"></i> Chat
-                                </button>
-                                {isPast ? (
-                                  <button
-                                    className="btn btn-app btn-app-secondary"
-                                    onClick={() => {
-                                      setRatingTargetId(meal.cook_id);
-                                      setRatingMealId(meal.id);
-                                      setRatingType("cook_rating");
-                                      setShowRateModal(true);
-                                    }}
-                                  >
-                                    Noter le chef
-                                  </button>
-                                ) : (
-                                  <button
-                                    className="btn btn-app btn-app-outline btn-outline-danger"
-                                    onClick={() => handleCancelBooking(meal.id)}
-                                  >
-                                    Annuler
-                                  </button>
-                                )}
-                              </>
+                          {/* Cost split */}
+                          {!isCancelled && (
+                            <div style={{ display: "flex", gap: 8, marginBottom: "0.9rem" }}>
+                              {[
+                                { label: "Total estimé", val: `${meal.total_price_estimate?.toFixed(2)}€` },
+                                { label: "Convives", val: meal.current_guests },
+                                { label: "Votre part", val: `${part.amount_due?.toFixed(2)}€`, highlight: true },
+                              ].map(({ label, val, highlight }) => (
+                                <div key={label} style={{ flex: 1, textAlign: "center", background: highlight ? "rgba(200,90,50,0.07)" : "#f9fafb", borderRadius: 10, padding: "8px 4px" }}>
+                                  <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginBottom: 2 }}>{label}</div>
+                                  <div style={{ fontWeight: 700, fontSize: "0.95rem", color: highlight ? "var(--primary)" : "#111" }}>{val}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Action buttons */}
+                          <div className="d-flex gap-2 flex-wrap">
+                            {!isCancelled && (
+                              <button className="btn btn-app btn-app-primary" style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                                onClick={() => { setChatMealId(meal.id); setShowChatModal(true); }}>
+                                <i className="fas fa-comments"></i> Chat
+                              </button>
+                            )}
+                            {part.status === "booked" && !isPast && (
+                              <button
+                                className="btn btn-app btn-app-primary"
+                                style={{ fontSize: "0.82rem", padding: "6px 14px", background: "linear-gradient(135deg,#16a34a,#22c55e)", border: "none" }}
+                                onClick={() => { setPayParticipation(part); setShowPayModal(true); }}
+                              >
+                                💳 Payer ma part
+                              </button>
+                            )}
+                            {part.status === "booked" && isPast && (
+                              <button className="btn btn-app btn-app-secondary" style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                                onClick={() => { setRatingTargetId(meal.cook_id); setRatingMealId(meal.id); setRatingType("cook_rating"); setShowRateModal(true); }}>
+                                ⭐ Noter le chef
+                              </button>
+                            )}
+                            {part.status === "booked" && !isPast && (
+                              <button className="btn btn-app btn-app-outline btn-outline-danger" style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                                onClick={() => handleCancelBooking(meal.id)}>
+                                Annuler
+                              </button>
                             )}
                           </div>
                         </div>
@@ -1119,14 +1159,33 @@ export default function App() {
               <button className="modal-close" onClick={() => setShowCreateMealModal(false)}>×</button>
             </div>
             <form onSubmit={handleCreateMeal}>
-              <div className="modal-body" style={{ maxHeight: "65vh" }}>
+              <div className="modal-body" style={{ maxHeight: "70vh" }}>
                 <div className="form-group">
                   <label className="form-label">Titre du Repas (avec émoji !)</label>
                   <input type="text" className="form-control" placeholder="ex: 🥘 Couscous Royal Convivial" value={newMealTitle} onChange={e => setNewMealTitle(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Description / Recette / Ambiance</label>
-                  <textarea className="form-control" placeholder="Décrivez ce que vous allez cuisiner..." value={newMealDesc} onChange={e => setNewMealDesc(e.target.value)} required />
+                  <label className="form-label">Description / Ambiance</label>
+                  <textarea className="form-control" rows={2} placeholder="Décrivez l'ambiance, l'origine du plat..." value={newMealDesc} onChange={e => setNewMealDesc(e.target.value)} required />
+                </div>
+
+                {/* Menu Section */}
+                <div style={{ background: "rgba(200,90,50,0.04)", border: "1px solid rgba(200,90,50,0.12)", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
+                  <div style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "var(--primary)", marginBottom: 10 }}>🍽️ Détail du Menu (optionnel)</div>
+                  <div className="row">
+                    <div className="col-12 form-group mb-2">
+                      <label className="form-label" style={{ fontSize: "0.82rem" }}>🥗 Entrée</label>
+                      <input type="text" className="form-control" placeholder="ex: Salade de chèvre chaud" value={newMealStarter} onChange={e => setNewMealStarter(e.target.value)} />
+                    </div>
+                    <div className="col-12 form-group mb-2">
+                      <label className="form-label" style={{ fontSize: "0.82rem" }}>🍲 Plat principal</label>
+                      <input type="text" className="form-control" placeholder="ex: Boeuf bourguignon maison" value={newMealMainCourse} onChange={e => setNewMealMainCourse(e.target.value)} />
+                    </div>
+                    <div className="col-12 form-group mb-0">
+                      <label className="form-label" style={{ fontSize: "0.82rem" }}>🍮 Dessert</label>
+                      <input type="text" className="form-control" placeholder="ex: Tarte tatin avec crème fraîche" value={newMealDessert} onChange={e => setNewMealDessert(e.target.value)} />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="row">
@@ -1135,7 +1194,7 @@ export default function App() {
                     <input type="number" className="form-control" min="1" max="15" value={newMealMaxGuests} onChange={e => setNewMealMaxGuests(e.target.value)} required />
                   </div>
                   <div className="col-md-6 form-group">
-                    <label className="form-label">Prix Total Estimé (Ingrédients) (€)</label>
+                    <label className="form-label">Prix Total Estimé Ingrédients (€)</label>
                     <input type="number" className="form-control" min="1" step="0.5" value={newMealTotalPrice} onChange={e => setNewMealTotalPrice(e.target.value)} required />
                   </div>
                 </div>
@@ -1152,17 +1211,17 @@ export default function App() {
 
                 <div className="row">
                   <div className="col-md-6 form-group">
-                    <label className="form-label">Latitude géoloc</label>
+                    <label className="form-label">Latitude</label>
                     <input type="number" step="0.0001" className="form-control" value={newMealLat} onChange={e => setNewMealLat(parseFloat(e.target.value))} required />
                   </div>
                   <div className="col-md-6 form-group">
-                    <label className="form-label">Longitude géoloc</label>
+                    <label className="form-label">Longitude</label>
                     <input type="number" step="0.0001" className="form-control" value={newMealLng} onChange={e => setNewMealLng(parseFloat(e.target.value))} required />
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Allergènes présents dans le plat</label>
+                  <label className="form-label">Allergènes présents</label>
                   <div className="checkbox-group">
                     {["Gluten", "Lactose", "Arachides", "Crustacés", "Oeufs", "Poisson"].map(a => (
                       <label key={a} className="checkbox-item">
@@ -1176,6 +1235,90 @@ export default function App() {
               <div className="modal-footer">
                 <button type="button" className="btn btn-app btn-app-secondary" onClick={() => setShowCreateMealModal(false)}>Annuler</button>
                 <button type="submit" className="btn btn-app btn-app-primary">Publier le repas</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2b. PAYMENT MODAL */}
+      {showPayModal && payParticipation && (
+        <div className="modal-overlay">
+          <div className="app-modal" style={{ maxWidth: 480 }}>
+            <div className="modal-header" style={{ background: "linear-gradient(135deg,#16a34a,#22c55e)", color: "white", borderRadius: "var(--radius) var(--radius) 0 0" }}>
+              <h3 className="m-0 h5 fw-bold" style={{ color: "white" }}>💳 Paiement sécurisé</h3>
+              <button className="modal-close" style={{ color: "rgba(255,255,255,0.8)" }} onClick={() => { setShowPayModal(false); setPayParticipation(null); setCardFlipped(false); }}>×</button>
+            </div>
+            <form onSubmit={handlePay}>
+              <div className="modal-body">
+                {/* Récap */}
+                <div style={{ background: "rgba(34,197,94,0.06)", borderRadius: 10, padding: "0.8rem 1rem", marginBottom: "1.2rem", border: "1px solid rgba(34,197,94,0.2)" }}>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#16a34a", textTransform: "uppercase", marginBottom: 4 }}>Récapitulatif</div>
+                  <div style={{ fontSize: "0.9rem" }}><strong>{payParticipation.meal?.title}</strong></div>
+                  <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>Votre part : <strong style={{ color: "#16a34a", fontSize: "1.1rem" }}>{payParticipation.amount_due?.toFixed(2)}€</strong></div>
+                </div>
+
+                {/* Animated Credit Card */}
+                <div className={`credit-card-wrapper ${cardFlipped ? "flipped" : ""}`} style={{ perspective: 1000, marginBottom: "1.5rem" }}>
+                  <div className="credit-card" style={{ position: "relative", width: "100%", height: 180, transformStyle: "preserve-3d", transition: "transform 0.6s ease", transform: cardFlipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
+                    {/* Front */}
+                    <div style={{ position: "absolute", inset: 0, backfaceVisibility: "hidden", background: "linear-gradient(135deg,#1e3a5f,#2563eb,#1e40af)", borderRadius: 16, padding: "1.5rem", color: "white", boxShadow: "0 20px 40px rgba(0,0,0,0.25)" }}>
+                      <div style={{ fontSize: "0.7rem", opacity: 0.7, letterSpacing: 2 }}>CARTE DE DÉBIT</div>
+                      <div style={{ fontSize: "1.35rem", letterSpacing: 4, marginTop: "1rem", fontFamily: "monospace", fontWeight: 700 }}>
+                        {(cardNumber || "•••• •••• •••• ••••").replace(/(.{4})/g, "$1 ").trim()}
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1.2rem", fontSize: "0.82rem" }}>
+                        <div><div style={{ opacity: 0.6, fontSize: "0.62rem", marginBottom: 2 }}>TITULAIRE</div>{cardName || "VOTRE NOM"}</div>
+                        <div><div style={{ opacity: 0.6, fontSize: "0.62rem", marginBottom: 2 }}>EXPIRATION</div>{cardExpiry || "MM/AA"}</div>
+                      </div>
+                    </div>
+                    {/* Back */}
+                    <div style={{ position: "absolute", inset: 0, backfaceVisibility: "hidden", background: "linear-gradient(135deg,#374151,#1f2937)", borderRadius: 16, transform: "rotateY(180deg)", display: "flex", flexDirection: "column", justifyContent: "center", boxShadow: "0 20px 40px rgba(0,0,0,0.25)" }}>
+                      <div style={{ height: 44, background: "#111", margin: "0 0 1rem" }}></div>
+                      <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 1.5rem", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1, height: 32, background: "#fff", borderRadius: 4 }}></div>
+                        <div style={{ width: 64, height: 32, background: "rgba(255,255,255,0.9)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace", fontWeight: 700, color: "#111", letterSpacing: 3 }}>{cardCVV || "•••"}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card fields */}
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: "0.82rem" }}>Numéro de carte</label>
+                  <input className="form-control" placeholder="1234 5678 9012 3456" maxLength={19}
+                    value={cardNumber}
+                    onChange={e => setCardNumber(e.target.value.replace(/\D/g,"").replace(/(\d{4})/g,"$1 ").trim())}
+                    required style={{ fontFamily: "monospace", letterSpacing: 2 }} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: "0.82rem" }}>Nom du titulaire</label>
+                  <input className="form-control" placeholder="JEAN DUPONT" value={cardName}
+                    onChange={e => setCardName(e.target.value.toUpperCase())} required />
+                </div>
+                <div className="row">
+                  <div className="col-7 form-group">
+                    <label className="form-label" style={{ fontSize: "0.82rem" }}>Date d'expiration</label>
+                    <input className="form-control" placeholder="MM/AA" maxLength={5}
+                      value={cardExpiry} onChange={e => setCardExpiry(e.target.value)} required />
+                  </div>
+                  <div className="col-5 form-group">
+                    <label className="form-label" style={{ fontSize: "0.82rem" }}>CVV</label>
+                    <input className="form-control" placeholder="•••" maxLength={3}
+                      value={cardCVV}
+                      onFocus={() => setCardFlipped(true)}
+                      onBlur={() => setCardFlipped(false)}
+                      onChange={e => setCardCVV(e.target.value.replace(/\D/g,""))} required
+                      style={{ fontFamily: "monospace", letterSpacing: 3 }} />
+                  </div>
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#9ca3af", textAlign: "center", marginTop: 4 }}>🔒 Paiement simulé — aucune vraie transaction</div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-app btn-app-secondary" onClick={() => { setShowPayModal(false); setPayParticipation(null); setCardFlipped(false); }}>Annuler</button>
+                <button type="submit" className="btn btn-app btn-app-primary" style={{ background: "linear-gradient(135deg,#16a34a,#22c55e)", border: "none" }} disabled={payLoading}>
+                  {payLoading ? "⏳ Traitement..." : "✅ Confirmer le paiement"}
+                </button>
               </div>
             </form>
           </div>

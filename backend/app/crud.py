@@ -6,6 +6,7 @@ from math import radians, cos, sin, asin, sqrt
 
 from app import models, schemas
 from app.auth import get_password_hash
+from app.metrics import PAYMENTS_TOTAL
 
 # Helper for Haversine distance
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -138,7 +139,7 @@ def get_meals(
 def recalculate_meal_costs(db: Session, meal: models.Meal):
     active_participations = db.query(models.Participation).filter(
         models.Participation.meal_id == meal.id,
-        models.Participation.status == "booked"
+        models.Participation.status.in_(["booked", "confirmed"])
     ).all()
     
     num_guests = len(active_participations)
@@ -197,7 +198,7 @@ def cancel_participation(db: Session, meal_id: int, guest_id: int):
     participation = db.query(models.Participation).filter(
         models.Participation.meal_id == meal_id,
         models.Participation.guest_id == guest_id,
-        models.Participation.status == "booked"
+        models.Participation.status.in_(["booked", "confirmed"])
     ).first()
     
     if not participation:
@@ -213,6 +214,20 @@ def cancel_participation(db: Session, meal_id: int, guest_id: int):
         recalculate_meal_costs(db, meal)
         
     return True
+
+def pay_participation(db: Session, participation_id: int):
+    participation = db.query(models.Participation).filter(
+        models.Participation.id == participation_id,
+        models.Participation.status == "booked"
+    ).first()
+    if not participation:
+        return None
+        
+    participation.status = "confirmed"
+    db.commit()
+    db.refresh(participation)
+    PAYMENTS_TOTAL.labels(status="success").inc()
+    return participation
 
 # Message CRUD
 def create_message(db: Session, meal_id: int, sender_id: int, content: str):
@@ -261,7 +276,9 @@ def create_rating(db: Session, rating_in: schemas.RatingCreate, reviewer_id: int
 def get_admin_metrics(db: Session, active_ws_count: int) -> schemas.AdminMetricsResponse:
     total_users = db.query(models.User).count()
     total_meals = db.query(models.Meal).count()
-    total_reservations = db.query(models.Participation).filter(models.Participation.status == "booked").count()
+    total_reservations = db.query(models.Participation).filter(
+        models.Participation.status.in_(["booked", "confirmed"])
+    ).count()
     
     # Sum of estimates for active/completed meals
     total_costs_shared = db.query(func.sum(models.Meal.total_price_estimate)).filter(

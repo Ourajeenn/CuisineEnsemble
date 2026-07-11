@@ -1,9 +1,26 @@
-version: '3.8'
+# version field removed – Docker Compose v2 ignores it
+
+# ──────────────────────────────────────────
+# CuisineEnsemble — Docker Compose Full Stack
+# Backend · Frontend · PostgreSQL · Prometheus · Grafana
+# ──────────────────────────────────────────
+
+networks:
+  cuisine_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  grafana_data:
+  prometheus_data:
 
 services:
+
+  # ── PostgreSQL ───────────────────────────
   db:
     image: postgres:15-alpine
-    container_name: cuisine_ensemble_db
+    container_name: cuisine_db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
@@ -12,44 +29,116 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - cuisine_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # ── Backend FastAPI ──────────────────────
   backend:
-    build: ./backend
-    container_name: cuisine_ensemble_backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cuisine_backend
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://postgres:password@db:5432/cuisine_ensemble
       - SECRET_KEY=super_secret_cuisine_ensemble_key_2026
+      - PYTHONUNBUFFERED=1
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    networks:
+      - cuisine_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
 
+  # ── Frontend React/Nginx ─────────────────
   frontend:
-    build: ./frontend
-    container_name: cuisine_ensemble_frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:8000/api/v1
+    container_name: cuisine_frontend
+    restart: unless-stopped
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    networks:
+      - cuisine_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
+  # ── Prometheus ───────────────────────────
   prometheus:
-    image: prom/prometheus:latest
-    container_name: cuisine_ensemble_prometheus
+    image: prom/prometheus:v2.50.1
+    container_name: cuisine_prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
     ports:
       - "9090:9090"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    networks:
+      - cuisine_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
+  # ── Grafana ──────────────────────────────
   grafana:
-    image: grafana/grafana:latest
-    container_name: cuisine_ensemble_grafana
+    image: grafana/grafana:10.3.1
+    container_name: cuisine_grafana
+    restart: unless-stopped
     ports:
       - "3100:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=cuisineadmin2026
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_SERVER_ROOT_URL=http://localhost:3100
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/cuisine_dashboard.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
     depends_on:
-      - prometheus
-
-volumes:
-  postgres_data:
-  grafana_data:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - cuisine_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3

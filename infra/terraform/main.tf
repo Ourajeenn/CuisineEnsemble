@@ -8,7 +8,7 @@ terraform {
   required_version = ">= 1.6.0"
 
   required_providers {
-    # Provider communautaire Fly.io (le seul disponible)
+    # Provider communautaire Fly.io (il est utilisé comme un host dans ce cas)
     # Source : https://registry.terraform.io/providers/fly-apps/fly/latest
     fly = {
       source  = "fly-apps/fly"

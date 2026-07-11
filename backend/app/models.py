@@ -29,6 +29,9 @@ class Meal(Base):
     cook_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(String)
+    starter = Column(String, nullable=True) # e.g. "Salade de chèvre chaud"
+    main_course = Column(String, nullable=True) # e.g. "Boeuf bourguignon"
+    dessert = Column(String, nullable=True) # e.g. "Tarte aux pommes"
     max_guests = Column(Integer, default=5)
     current_guests = Column(Integer, default=0)
     total_price_estimate = Column(Float, nullable=False)
